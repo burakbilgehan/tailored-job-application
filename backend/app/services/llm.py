@@ -2,7 +2,7 @@ import json
 from google import genai
 from google.genai import types
 
-MODEL = "gemini-1.5-flash"
+MODEL = "gemini-2.5-flash-lite"
 
 SYSTEM_PROMPT = """You are an expert career coach and professional writer.
 Your task is to help candidates tailor their job applications to specific positions.
