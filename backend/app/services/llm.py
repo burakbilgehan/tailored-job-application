@@ -16,22 +16,17 @@ def _client(api_key: str) -> genai.Client:
     return genai.Client(api_key=api_key)
 
 
-def _chat(client: genai.Client, prompt: str) -> str:
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            max_output_tokens=4096,
-        ),
-    )
-    return response.text
+def analyze_and_generate(
+    cv_text: str,
+    cv_format: str,
+    job_listing: str,
+    profile_context: str,
+    extra_context: str,
+    api_key: str,
+) -> dict:
+    prompt = f"""You are given a candidate's CV and a job listing. Perform a complete application tailoring in one pass.
 
-
-def analyze_fit(cv_text: str, job_listing: str, profile_context: str, extra_context: str, api_key: str) -> str:
-    prompt = f"""Analyze how well this candidate fits the job listing.
-
-## Candidate CV
+## Candidate CV ({cv_format})
 {cv_text}
 
 ## Additional Profile Context
@@ -40,90 +35,50 @@ def analyze_fit(cv_text: str, job_listing: str, profile_context: str, extra_cont
 ## Job Listing
 {job_listing}
 
-## Extra Context
+## Extra Instructions
 {extra_context or "None provided."}
 
-Produce a structured analysis with:
-1. Strong matches (skills, experience, accomplishments that align well)
-2. Gaps or weaknesses relative to this role
-3. Key themes to emphasize in the application
+Produce a JSON object with exactly these four keys:
 
-Be specific and reference actual content from the CV and job listing."""
-    return _chat(_client(api_key), prompt)
+1. "fit_analysis": A structured analysis string covering:
+   - Strong matches (skills, experience, accomplishments that align well)
+   - Gaps or weaknesses relative to this role
+   - Key themes to emphasize in the application
 
+2. "cover_letter": A professional cover letter in markdown. Requirements:
+   - 3-4 paragraphs, concise and impactful
+   - Opening: why this role, why this company (infer from the listing)
+   - Middle: 2-3 specific achievements/skills that directly address the role
+   - Closing: call to action
+   - Tone: confident but not arrogant, professional
+   - Do NOT use generic filler phrases like "I am writing to express my interest..."
+   - Raw markdown, no code block wrapper
 
-def generate_cover_letter(analysis: str, cv_text: str, job_listing: str, extra_context: str, api_key: str) -> str:
-    prompt = f"""Write a professional cover letter in English based on the analysis below.
+3. "cv_suggestions": A JSON array where each item has:
+   - "section": the CV section to modify (e.g., "Summary", "Experience - Company X", "Skills")
+   - "suggestion": specific, actionable improvement instruction
+   Example: [{{"section": "Summary", "suggestion": "Rewrite to emphasize distributed systems experience."}}]
 
-## Fit Analysis
-{analysis}
+4. "revised_cv": The full rewritten CV in {cv_format} format, applying the suggestions.
+   - Preserve the original format exactly (same structure, same LaTeX commands if applicable)
+   - Only modify content that is directly improved by the suggestions
+   - Do NOT invent new experiences, companies, or degrees
+   - Raw {cv_format} content only, no code block wrapper
 
-## Original CV
-{cv_text}
+Return ONLY the JSON object, no markdown wrapper, no extra text."""
 
-## Job Listing
-{job_listing}
+    client = _client(api_key)
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            max_output_tokens=8192,
+        ),
+    )
 
-## Extra Instructions
-{extra_context or "None."}
-
-Requirements:
-- 3-4 paragraphs, concise and impactful
-- Opening: why this role, why this company (infer from the listing)
-- Middle: 2-3 specific achievements/skills that directly address the role requirements
-- Closing: call to action
-- Tone: confident but not arrogant, professional
-- Do NOT use generic filler phrases ("I am writing to express my interest...")
-- Output raw markdown, no code block wrapper"""
-    return _chat(_client(api_key), prompt)
-
-
-def generate_cv_suggestions(analysis: str, cv_text: str, cv_format: str, api_key: str) -> list[dict]:
-    prompt = f"""Based on the fit analysis, suggest specific improvements to this CV for the target role.
-
-## Fit Analysis
-{analysis}
-
-## Current CV ({cv_format})
-{cv_text}
-
-Output a JSON array (no markdown wrapper) where each item has:
-- "section": the CV section to modify (e.g., "Summary", "Experience - Company X", "Skills")
-- "suggestion": specific, actionable improvement instruction
-
-Example:
-[
-  {{"section": "Summary", "suggestion": "Rewrite to emphasize distributed systems experience. Current version is too generic."}},
-  {{"section": "Experience - Acme Corp", "suggestion": "Add a quantified achievement for the API migration project mentioned. E.g., 'reduced latency by X%'."}}
-]
-
-Return only the JSON array."""
-
-    raw = _chat(_client(api_key), prompt)
-    raw = raw.strip()
+    raw = response.text.strip()
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+
     return json.loads(raw)
-
-
-def generate_revised_cv(analysis: str, cv_text: str, cv_format: str, suggestions: list[dict], api_key: str) -> str:
-    suggestions_text = "\n".join(
-        f"- [{s['section']}]: {s['suggestion']}" for s in suggestions
-    )
-    prompt = f"""Rewrite the CV below in English, applying the suggested improvements for the target role.
-Preserve the original format ({cv_format}) exactly — same structure, same commands/syntax if LaTeX.
-
-## Fit Analysis
-{analysis}
-
-## Suggested Improvements
-{suggestions_text}
-
-## Original CV
-{cv_text}
-
-Rules:
-- Only modify content that is directly improved by the suggestions
-- Do NOT invent new experiences, companies, or degrees
-- Do NOT add a code block wrapper — output the raw {cv_format} content only"""
-    return _chat(_client(api_key), prompt)

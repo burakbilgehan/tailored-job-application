@@ -4,12 +4,7 @@ from fastapi.responses import Response
 
 from app.models.schemas import AnalyzeResponse, CoverLetterResult, CvSuggestion, RevisedCvResult
 from app.services.fetcher import fetch_job_listing
-from app.services.llm import (
-    analyze_fit,
-    generate_cover_letter,
-    generate_cv_suggestions,
-    generate_revised_cv,
-)
+from app.services.llm import analyze_and_generate
 from app.services.parser import parse_cv
 
 router = APIRouter(prefix="/api")
@@ -44,11 +39,14 @@ async def analyze(
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     key = gemini_api_key.strip()
 
-    analysis = analyze_fit(cv_text, job_listing, profile_context, extra_context, key)
+    try:
+        result = analyze_and_generate(cv_text, cv_format, job_listing, profile_context, extra_context, key)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM error: {e}")
 
-    cover_letter_md = generate_cover_letter(analysis, cv_text, job_listing, extra_context, key)
-    suggestions_raw = generate_cv_suggestions(analysis, cv_text, cv_format, key)
-    revised_cv_content = generate_revised_cv(analysis, cv_text, cv_format, suggestions_raw, key)
+    cover_letter_md = result["cover_letter"]
+    suggestions_raw = result["cv_suggestions"]
+    revised_cv_content = result["revised_cv"]
 
     cl_filename = f"cover_letter_{ts}.md"
     cv_ext = "tex" if cv_format == "latex" else "md"
