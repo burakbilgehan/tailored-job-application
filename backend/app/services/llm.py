@@ -1,9 +1,9 @@
 import json
-import re
 from google import genai
 from google.genai import types
 
 MODEL = "gemini-2.5-flash-lite"
+DELIMITER = "===REVISED_CV==="
 
 SYSTEM_PROMPT = """You are an expert career coach and professional writer.
 Your task is to help candidates tailor their job applications to specific positions.
@@ -39,34 +39,24 @@ def analyze_and_generate(
 ## Extra Instructions
 {extra_context or "None provided."}
 
-Produce a JSON object with exactly these four keys:
+Your response MUST have exactly two parts separated by the delimiter line {DELIMITER}
 
-1. "fit_analysis": A structured analysis string covering:
-   - Strong matches (skills, experience, accomplishments that align well)
-   - Gaps or weaknesses relative to this role
-   - Key themes to emphasize in the application
+PART 1 (before the delimiter): A valid JSON object with these three keys:
+- "fit_analysis": structured analysis string (strong matches, gaps, key themes)
+- "cover_letter": professional cover letter in markdown (3-4 paragraphs, no generic openers, raw markdown)
+- "cv_suggestions": array of objects with "section" and "suggestion" keys
 
-2. "cover_letter": A professional cover letter in markdown. Requirements:
-   - 3-4 paragraphs, concise and impactful
-   - Opening: why this role, why this company (infer from the listing)
-   - Middle: 2-3 specific achievements/skills that directly address the role
-   - Closing: call to action
-   - Tone: confident but not arrogant, professional
-   - Do NOT use generic filler phrases like "I am writing to express my interest..."
-   - Raw markdown, no code block wrapper
+PART 2 (after the delimiter): The full rewritten CV in raw {cv_format} format.
+- Preserve exact format and structure
+- Only apply content improvements from your suggestions
+- Do NOT invent new experiences, companies, or degrees
+- Output the raw file content only, no code block wrapper
 
-3. "cv_suggestions": A JSON array where each item has:
-   - "section": the CV section to modify (e.g., "Summary", "Experience - Company X", "Skills")
-   - "suggestion": specific, actionable improvement instruction
-   Example: [{{"section": "Summary", "suggestion": "Rewrite to emphasize distributed systems experience."}}]
-
-4. "revised_cv": The full rewritten CV in {cv_format} format, applying the suggestions.
-   - Preserve the original format exactly (same structure, same LaTeX commands if applicable)
-   - Only modify content that is directly improved by the suggestions
-   - Do NOT invent new experiences, companies, or degrees
-   - Raw {cv_format} content only, no code block wrapper
-
-Return ONLY the JSON object, no markdown wrapper, no extra text."""
+Example structure:
+{{"fit_analysis": "...", "cover_letter": "...", "cv_suggestions": [{{"section": "...", "suggestion": "..."}}]}}
+{DELIMITER}
+\\documentclass{{article}}
+..."""
 
     client = _client(api_key)
     response = client.models.generate_content(
@@ -75,12 +65,15 @@ Return ONLY the JSON object, no markdown wrapper, no extra text."""
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
             max_output_tokens=8192,
-            response_mime_type="application/json",
         ),
     )
 
     raw = response.text.strip()
-    # Fix unescaped backslashes (e.g. LaTeX \section, \textbf)
-    raw = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw)
-    # strict=False allows literal control characters (newlines) inside strings
-    return json.loads(raw, strict=False)
+
+    if DELIMITER not in raw:
+        raise ValueError(f"Model response missing delimiter '{DELIMITER}'")
+
+    json_part, cv_part = raw.split(DELIMITER, 1)
+    result = json.loads(json_part.strip())
+    result["revised_cv"] = cv_part.strip()
+    return result
