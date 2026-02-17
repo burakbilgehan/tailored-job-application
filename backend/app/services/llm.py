@@ -1,4 +1,5 @@
 import json
+import re
 from google import genai
 from google.genai import types
 
@@ -78,4 +79,8 @@ Return ONLY the JSON object, no markdown wrapper, no extra text."""
         ),
     )
 
-    return json.loads(response.text)
+    raw = response.text.strip()
+    # Fix unescaped backslashes (e.g. LaTeX \section, \textbf)
+    raw = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw)
+    # strict=False allows literal control characters (newlines) inside strings
+    return json.loads(raw, strict=False)
