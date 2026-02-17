@@ -14,3 +14,10 @@ frontend/dist/
 
 # OS
 .DS_Store
+
+# Test/sample files
+*.tex
+*.md
+!README.md
+!frontend/README.md
+!docs/*.md
