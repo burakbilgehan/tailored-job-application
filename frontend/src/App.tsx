@@ -1,15 +1,38 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { analyze } from "./api/client";
 import type { AnalyzeResponse } from "./api/client";
 import InputForm from "./components/InputForm/InputForm";
 import ResultTabs from "./components/ResultTabs/ResultTabs";
 import "./App.css";
 
+const STAGES = [
+  "Reading your CV...",
+  "Analyzing fit against the job listing...",
+  "Writing cover letter...",
+  "Generating CV suggestions...",
+  "Rewriting your CV...",
+  "Almost done...",
+];
+
 export default function App() {
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [originalCv, setOriginalCv] = useState("");
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (loading) {
+      setStage(0);
+      timerRef.current = setInterval(() => {
+        setStage(s => Math.min(s + 1, STAGES.length - 1));
+      }, 8000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [loading]);
 
   async function handleSubmit(fd: FormData) {
     setLoading(true);
@@ -43,7 +66,8 @@ export default function App() {
         {loading && (
           <div className="loading-state">
             <div className="spinner" />
-            <p>Analyzing your profile against the role... this may take 30–60 seconds.</p>
+            <p>{STAGES[stage]}</p>
+            <p className="hint">This may take 30–60 seconds.</p>
           </div>
         )}
 
