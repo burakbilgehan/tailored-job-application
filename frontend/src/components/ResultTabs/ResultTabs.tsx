@@ -36,11 +36,21 @@ export default function ResultTabs({ result, originalCv }: Props) {
 
       {tab === "suggestions" && (
         <div className="tab-content">
+          {result.cv_summary && (
+            <div className="cv-summary">
+              <p>{result.cv_summary}</p>
+            </div>
+          )}
           <ul className="suggestions-list">
             {result.cv_suggestions.map((s, i) => (
               <li key={i}>
                 <strong>{s.section}</strong>
                 <p>{s.suggestion}</p>
+                {s.reasoning && (
+                  <p className="suggestion-reasoning">
+                    <span className="reasoning-label">Why:</span> {s.reasoning}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
