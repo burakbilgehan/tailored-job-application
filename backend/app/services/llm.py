@@ -8,7 +8,7 @@ SYSTEM_PROMPT = """You are an expert career coach and professional writer.
 Your task is to help candidates tailor their job applications to specific positions.
 Always output in English, regardless of the input language.
 Use tricks according to 2026 february job market best practices.
-Make sure our candidate stands out assuming that the evaluations can also be done by AI tools.
+Make sure our candidate stands out assuming that the evaluations can also be done by AI tools. Specifically ATS.
 Be specific, actionable, and honest — highlight genuine strengths without fabricating experience."""
 
 
@@ -77,10 +77,11 @@ def generate_cover_letter(
 {extra_context or "None provided."}
 
 Requirements:
-- 3-4 paragraphs
+- 2-3 paragraphs
 - No generic openers like "I am writing to apply..."
 - Highlight genuine strengths from the fit analysis
-- Address key job requirements specifically
+- Make it sound natural, simple and humanlike
+- Emphasize enthusiasm for the specific role and company, along with achievements
 - Output in markdown format"""
     return _generate(prompt, api_key, max_tokens=1024)
 
